@@ -6,6 +6,7 @@ use App\Models\Like;
 use App\Models\Post;
 use Illuminate\Http\Request;
 use App\Http\Resources\PostResource;
+use Illuminate\Support\Facades\Validator;
 
 class PostController extends Controller
 {
@@ -20,12 +21,22 @@ class PostController extends Controller
 
     public function toggleReaction(Request $request)
     {
-        $request->validate([
+
+        $input = $request->all();
+        $validator = Validator::make($input, [
             'post_id' => 'required|int|exists:posts,id',
             'like' => 'required|boolean',
         ]);
 
+        if($validator->fails()){
+            return response()->json([
+                'status' => 500,
+                'message' => $validator->errors(),
+            ]);   
+        }
+
         $post = Post::find($request->post_id);
+
         if (! $post) {
             return response()->json([
                 'status' => 404,
@@ -41,20 +52,28 @@ class PostController extends Controller
         }
 
         $like = Like::where('post_id', $request->post_id)->where('user_id', auth()->id())->first();
-        if ($like && $like->post_id == $request->post_id && $request->like) {
+
+        //if like is already exist
+        if ($like && $like->post_id == $request->post_id) {
+
+            if(! $request->like){
+                $like->delete();
+
+                return response()->json([
+                    'status' => 200,
+                    'message' => 'You unlike this post successfully',
+                ]);
+
+            }
+
             return response()->json([
                 'status' => 500,
                 'message' => 'You already liked this post',
             ]);
-        } elseif ($like && $like->post_id == $request->post_id && ! $request->like) {
-            $like->delete();
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'You unlike this post successfully',
-            ]);
-        }
+        } 
 
+        //create new like
         Like::create([
             'post_id' => $request->post_id,
             'user_id' => auth()->id(),
@@ -64,5 +83,6 @@ class PostController extends Controller
             'status' => 200,
             'message' => 'You like this post successfully',
         ]);
+
     }
 }
